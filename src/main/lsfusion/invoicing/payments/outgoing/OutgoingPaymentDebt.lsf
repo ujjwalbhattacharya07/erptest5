@@ -1,0 +1,60 @@
+MODULE OutgoingPaymentDebt;
+
+REQUIRE OutgoingPaymentCanceled, OutgoingPaymentContract, Debt;
+
+NAMESPACE Invoicing;
+
+// extend
+EXTEND CLASS OutgoingPayment : OutgoingDebt;
+type (OutgoingPayment p) += nameType(p);
+
+active (OutgoingPayment p) += active(p);
+number (OutgoingPayment p) += number(p);
+dateTime (OutgoingPayment p) += dateTime(p);
+
+partner (OutgoingPayment p) += partner(p);
+company (OutgoingPayment p) += company(p);
+
+contract (OutgoingPayment p) += contract(p);
+
+sourceCurrency (OutgoingPayment p) += currency(p);
+sourceAmount (OutgoingPayment p) += amount(p);
+
+// pay
+pay 'Match' (IncomingDebt d, OutgoingPayment p) {
+    paid(d, p) <- left(d, p) (+) paid(d, p);
+} CHANGEMOUSE 'DBLCLK';
+
+EXTEND FORM outgoingPayment
+    OBJECTS d = IncomingDebt
+    PROPERTIES(d) READONLY dateTime, number, class, type
+    PROPERTIES paid(d, p)
+    FILTERS paid(d, p), active(d)
+    
+    OBJECTS dd = IncomingDebt
+    PROPERTIES(dd) READONLY dateTime, number, class, type, left
+    PROPERTIES pay(dd, p) TOOLBAR
+    FILTERS canBePaid(dd, p), active(dd)   
+;
+
+DESIGN outgoingPayment {
+    details {
+        NEW debts FIRST {
+            caption = 'Payments matching';
+            MOVE BOX(d) { caption = 'Matched'; }            
+            MOVE BOX(dd) { caption = 'Available'; }          
+        }
+    }
+}
+
+// auto set paid
+WHEN (SETCHANGED(reference(OutgoingPayment p)) OR SETCHANGED(partner(p)) OR SET(active(p))) AND 
+     isISubstring(reference(p), number(IncomingDebt d)) AND 
+     canBePaid(d, p) DO
+    paid(d, p) <- left(d, p);
+    
+countPaid 'Number of payments' (OutgoingDebt p) = GROUP SUM 1 IF paid(IncomingDebt d, p) AND active(d) MATERIALIZED;
+
+EXTEND FORM outgoingPayments
+    PROPERTIES(p) READONLY countPaid, paid
+; 

@@ -1,0 +1,45 @@
+MODULE OutgoingPaymentDone;
+
+REQUIRE OutgoingPaymentReady;
+
+NAMESPACE Invoicing;
+
+EXTEND CLASS OutgoingPaymentStatus {
+    done 'Done'
+}
+done 'Done' = DATA BOOLEAN (OutgoingPayment);
+
+status(OutgoingPayment s) += WHEN done(s) THEN OutgoingPaymentStatus.done;
+
+markAsDone 'Mark as Done' (OutgoingPayment s) {
+    APPLY;
+    IF canceled() THEN RETURN;
+    
+    NEWSESSION {
+        done(s) <- TRUE;
+        APPLY;
+    }
+}
+
+EXTEND FORM outgoingPayment
+    PROPERTIES(p) markAsDoneReady = markAsDone SHOWIF status(p) = OutgoingPaymentStatus.ready,
+                  markAsDoneDraft = markAsDone SHOWIF status(p) = OutgoingPaymentStatus.draft,
+                  done
+;
+
+DESIGN outgoingPayment {
+    primaryActions {
+        MOVE PROPERTY(markAsDoneReady) { font = 'bold'; };
+    }
+    secondaryActions {
+        MOVE PROPERTY(markAsDoneDraft);
+    }
+    status {
+        MOVE PROPERTY(done(p));
+    }
+}
+
+EXTEND FORM outgoingPayments
+    EXTEND FILTERGROUP status
+        FILTER 'Done' status(p) = OutgoingPaymentStatus.done
+;

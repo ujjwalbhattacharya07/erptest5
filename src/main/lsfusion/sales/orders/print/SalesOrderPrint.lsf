@@ -1,0 +1,35 @@
+MODULE SalesOrderPrint;
+
+REQUIRE SalesOrder, DocTemplate;
+
+NAMESPACE Sales;
+
+addressLinesCustomer (Order o) = addressLines(customer(o));
+phoneCustomer (Order o) = phone(customer(o));
+
+addressLinesLocation (Order o) = addressLines(location(o));
+addressCsvLocation (Order o) = addressCsv(location(o));
+
+addressLinesCompany (Order o) = addressLines(company(o));
+addressCsvCompany (Order o) = addressCsv(company(o));
+phoneCompany (Order o) = phone(company(o));
+
+FORM printOrder 'Sales order'   
+    OBJECTS o = Order PANEL 
+    PROPERTIES(o) number, dateTime, scheduledDateTime, nameRepresentative,
+                  nameCustomer, addressLinesCustomer, addressCsvCustomer, 
+                  phoneCustomer, deliveryAddress,   
+                  nameLocation, addressLinesLocation, addressCsvLocation, 
+                  nameCompany, addressLinesCompany, addressCsvCompany, 
+                  phoneCompany
+        
+    OBJECTS l = OrderLine
+    PROPERTIES(l) idItem, nameItem, description, nameUom, idBarCodeItem, referenceItem, isService, 
+                  quantity, price,
+                  taxPercent, taxAmount, taxes, 
+                  untaxedAmount, amount
+    FILTERS order(l) = o
+; 
+
+@defineDocTemplateType(order, 'Sales order template');
+@defineDocTemplateTypeForm(order, o, Sales);

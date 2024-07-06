@@ -1,0 +1,65 @@
+MODULE SalesOrderPricelist;
+
+REQUIRE SalesOrderSearch, SalesPricelistValue;
+
+NAMESPACE Sales;
+
+// order type
+priceType = DATA PriceType (OrderType);
+namePriceType 'Price type' (OrderType t) = name(priceType(t));
+
+EXTEND FORM orderType
+    PROPERTIES(o) namePriceType
+;
+
+taxValid (OrderType it, PriceType pt) = 
+    (taxIncluded(it) AND taxIncluded(pt)) OR (NOT taxIncluded(pt) AND NOT taxIncluded(it));
+
+CONSTRAINT priceType(OrderType i) AND priceType(i) AND NOT taxValid(i, priceType(i))
+           CHECKED BY priceType[OrderType]
+           MESSAGE 'Invalid price type selected for order type, (not) including taxes'; 
+
+// price types
+priceType = DATA PriceType (Order);
+namePriceType 'Price type' (Order o) =  name(priceType(o));
+
+priceType (OrderLine l) = priceType(order(l));
+
+CONSTRAINT type(Order i) AND priceType(i) AND NOT taxValid(type(i), priceType(i))
+           CHECKED BY priceType[Order]
+           MESSAGE 'For implementation, a price type that is not valid for the type has been selected, (not) including taxes'; 
+
+WHEN LOCAL CHANGED(customer(Order o)) OR CHANGED(type(o)) DO 
+    priceType(o) <- OVERRIDE priceType(customer(o)), priceType(type(o));
+
+EXTEND FORM order
+    PROPERTIES(o) namePriceType
+;
+
+DESIGN order {
+    headerLeft {
+        MOVE PROPERTY(namePriceType(o)); 
+    }
+}
+
+// price
+listPrice (OrderLine l) = 
+    NUMERIC[10,2](overPriceA(priceType(order(l)), item(l), dateTime(l)) * 
+                  rate1((OVERRIDE currency(l), defaultCurrency()), currency(priceType(order(l))), date(l)));  
+defaultPrice (OrderLine l) += WHEN listPrice(l) THEN listPrice(l);
+                                    
+WHEN LOCAL (SETCHANGED(priceType(order(OrderLine l))) OR SETCHANGED(currency(order(l))) OR
+            (SETCHANGED(dateTime(order(l))) AND status(order(l)) = OrderStatus.draft)) 
+            AND NOT CHANGED(price(l)) DO {
+    price(l) <- defaultPrice(l); 
+}
+
+// search
+overListPrice 'Price' (Order o, Item i) = overPriceA(priceType(o), i, dateTime(o));
+
+EXTEND FORM order
+    PROPERTIES(o, itm) READONLY overListPrice
+
+    FILTERGROUP pricelist
+        FILTER 'In pricelist' overListPrice(o, itm)
+;

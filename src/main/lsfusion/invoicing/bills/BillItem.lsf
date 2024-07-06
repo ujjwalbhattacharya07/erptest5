@@ -1,0 +1,21 @@
+MODULE BillItem;
+
+REQUIRE Bill;
+
+NAMESPACE Invoicing;
+
+EXTEND FORM item
+    OBJECTS bl = BillLine
+    PROPERTIES(bl) READONLY number, dateTime, nameVendor, imagedNameStatus, nameCompany, quantity, price
+    PROPERTIES(bl) NEWSESSION EDIT
+    FILTERS item(bl) = i
+;
+
+DESIGN item {
+    operations {
+        NEW bills {
+            caption = 'Bills';
+            MOVE BOX(bl);
+        }
+    }
+}

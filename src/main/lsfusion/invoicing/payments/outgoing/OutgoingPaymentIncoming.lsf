@@ -1,0 +1,105 @@
+MODULE OutgoingPaymentIncoming;
+
+REQUIRE OutgoingPaymentCanceled, IncomingPaymentCanceled;
+
+NAMESPACE Invoicing;
+
+// type
+outgoingPaymentType = DATA OutgoingPaymentType (IncomingPaymentType);
+nameOutgoingPaymentType 'Outgoing payment type' (IncomingPaymentType t) = name(outgoingPaymentType(t));
+
+EXTEND FORM incomingPaymentType
+    PROPERTIES(o) nameOutgoingPaymentType
+;
+
+// incoming
+@defineDocRelation(incomingPayment, outgoingPayment, 'Incoming payment', 'Outgoing payment', p, p);
+
+outgoingPaymentCreated = DATA LOCAL OutgoingPayment ();
+newOutgoingPayment (IncomingPayment op) {
+    NEW ip = OutgoingPayment {
+        incomingPayment(ip) <- op;
+        
+        done(ip) <- done(op);
+        
+        type(ip) <- outgoingPaymentType(type(op));
+        
+        partner(ip) <- company(op);
+        company(ip) <- partner(op);
+
+        partnerAccount(ip) <- companyAccount(op);
+        companyAccount(ip) <- partnerAccount(op);
+        
+        amount(ip) <- amount(op);
+
+        note(ip) <- note(op);
+        reference(ip) <- reference(op);
+
+        outgoingPaymentCreated() <- ip;
+    }
+}
+
+createOutgoingPayment 'Create outgoing payment' (IncomingPayment op) {
+    APPLY;
+    IF canceled() THEN RETURN;
+    
+    NEWSESSION {
+        newOutgoingPayment(op);
+        SHOW outgoingPayment OBJECTS p = outgoingPaymentCreated() DOCKED;
+    }
+} 
+
+EXTEND FORM incomingPayment
+    PROPERTIES(p) createOutgoingPayment SHOWIF done(p) AND outgoingPaymentType(type(p)) AND NOT countOutgoingPayment(p) 
+;
+
+DESIGN incomingPayment {
+    primaryActions {
+        MOVE PROPERTY(createOutgoingPayment(p)) { fontStyle = 'bold'; }
+    }
+}
+
+// auto create
+autoCreateOutgoingPayment 'Automatically create outgoing payment' = DATA BOOLEAN (IncomingPaymentType);
+EXTEND FORM incomingPaymentType PROPERTIES(o) autoCreateOutgoingPayment;
+
+WHEN SET(active(IncomingPayment ip)) AND NOT countOutgoingPayment(ip) AND autoCreateOutgoingPayment(type(ip)) DO
+    newOutgoingPayment(ip);
+
+WHEN SET(active(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO
+    canceled(op) <- NULL;
+WHEN DROPPED (active(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO
+    canceled(op) <- TRUE;
+
+WHEN CHANGED(canceled(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    canceled(op) <- canceled(incomingPayment(op)); 
+WHEN CHANGED(done(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    done(op) <- done(incomingPayment(op));
+
+WHEN CHANGED(company(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    partner(op) <- company(incomingPayment(op));
+WHEN CHANGED(partner(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    company(op) <- partner(incomingPayment(op));
+
+WHEN CHANGED(companyAccount(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    partnerAccount(op) <- companyAccount(incomingPayment(op));
+WHEN CHANGED(partnerAccount(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    companyAccount(op) <- partnerAccount(incomingPayment(op));
+    
+WHEN CHANGED(amount(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    amount(op) <- amount(incomingPayment(op));
+
+WHEN CHANGED(note(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    note(op) <- note(incomingPayment(op));
+WHEN CHANGED(reference(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    reference(op) <- reference(incomingPayment(op));
+    
+WHEN CHANGED(reference(incomingPayment(OutgoingPayment op))) AND autoCreateOutgoingPayment(type(incomingPayment(op))) DO 
+    reference(op) <- reference(incomingPayment(op));
+
+WHEN CHANGED(type(incomingPayment(OutgoingPayment op))) AND DROPPED(autoCreateOutgoingPayment(type(incomingPayment(op)))) DO
+    canceled(op) <- TRUE;
+WHEN CHANGED(type(incomingPayment(OutgoingPayment op))) AND NOT DROPPED(autoCreateOutgoingPayment(type(incomingPayment(op)))) DO
+    type(op) <- outgoingPaymentType(type(incomingPayment(op)));
+WHEN CHANGED(type(incomingPayment(OutgoingPayment op))) AND SET(autoCreateOutgoingPayment(type(incomingPayment(op)))) DO
+    canceled(op) <- canceled(incomingPayment(op));

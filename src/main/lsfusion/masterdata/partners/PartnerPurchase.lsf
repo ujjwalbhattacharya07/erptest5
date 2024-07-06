@@ -1,0 +1,30 @@
+MODULE PartnerPurchase;
+
+REQUIRE MasterData, Partner;
+
+NAMESPACE MasterData;
+
+isVendor 'Vendor' = DATA BOOLEAN (Partner);
+
+isVendor(Partner p) <- TRUE WHEN SET(p IS Partner);
+
+EXTEND FORM partners
+    PROPERTIES(p) READONLYIF isReadonly() isVendor
+;
+
+EXTEND FORM partner 
+    PROPERTIES(p) isVendor
+;
+
+DESIGN partner {
+    headerColumn3 {
+        MOVE PROPERTY(isVendor(p));    
+    }
+    tabs {
+        NEW vendor {
+            showIf = isVendor(p);
+            caption = 'Purchase';
+            NEW vendorOptions;
+        }
+    }
+}

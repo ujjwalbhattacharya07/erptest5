@@ -1,0 +1,20 @@
+MODULE ScrapInitial;
+
+REQUIRE ScrapType;
+
+NAMESPACE Inventory;
+
+loadDefaultData () + {
+    NEW r = ScrapType {
+        name(r) <- 'Scrap';
+
+        NEW n = Numerator {
+            name(n) <- 'Scrap';
+            series(n) <- 'SPT';
+            minValue(n) <- 1;
+            maxValue(n) <- 999999;
+            stringLength(n) <- 6;
+            numerator(r) <- n;
+        }
+    }
+}

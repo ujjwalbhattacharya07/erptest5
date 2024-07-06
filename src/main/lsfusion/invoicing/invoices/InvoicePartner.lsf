@@ -1,0 +1,21 @@
+MODULE InvoicePartner;
+
+REQUIRE InvoiceDebt;
+
+NAMESPACE Invoicing;
+
+EXTEND FORM partner
+    OBJECTS i = Invoice
+    PROPERTIES(i) READONLY number, dateTime, imagedNameStatus, nameType, dueDateTime, note, untaxedAmount, taxAmount, amount, paid
+    PROPERTIES(i) NEWSESSION EDIT
+    FILTERS customer(i) = p
+;
+
+DESIGN partner {
+    tabs {
+        NEW invoices {
+            caption = 'Invoices';
+            MOVE BOX(i);
+        }
+    }
+}

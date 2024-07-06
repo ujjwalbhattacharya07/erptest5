@@ -1,0 +1,10 @@
+MODULE ShipmentPack;
+
+REQUIRE ItemSalesPack, BarCodePack,
+        ShipmentDone, ShipmentSearch;
+
+NAMESPACE Inventory;
+
+@defineDocPack(shipment, sales, product, done, s);
+
+@defineBarCodeSearchPack(shipment, l, done);

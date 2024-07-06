@@ -1,0 +1,21 @@
+MODULE ShipmentPrintRu;
+
+REQUIRE ShipmentPrint, LocationEmployeeRu, LegalEntityRu, UomRu;
+
+NAMESPACE Inventory;
+
+innCompany (Shipment i) = inn(company(i));
+okpoCompany (Shipment i) = okpo(company(i));
+
+legalCodeUom (ShipmentLine l) = legalCode(uom(l));
+
+order = ABSTRACT ISTRING (Shipment);
+
+EXTEND FORM printShipment
+    PROPERTIES performed = namePerformed(location(o)), order(o),
+               positionPerformed = positionNamePerformed(location(o)),
+               received = namePerformed(toLocation(o)),
+               positionReceived = positionNamePerformed(toLocation(o)),
+               innCompany(o), okpoCompany(o)
+    PROPERTIES legalCodeUom(l)
+;

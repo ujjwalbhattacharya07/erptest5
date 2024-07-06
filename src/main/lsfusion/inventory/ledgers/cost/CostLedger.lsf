@@ -1,0 +1,162 @@
+MODULE CostLedger;
+
+REQUIRE Location, Product, Utils, CostProduct, ItemCost;
+
+NAMESPACE Inventory;
+
+CLASS CostLedger 'Cost ledger';
+class 'View' (CostLedger l) = objectClassName(l) IF l IS CostLedger CHARWIDTH 15;
+
+type 'Type' = ABSTRACT ISTRING[100] (CostLedger) CHARWIDTH 20 MATERIALIZED;
+
+dateTime 'Time' = ABSTRACT DATETIME (CostLedger) MATERIALIZED INDEXED;
+date 'Date' (CostLedger l) = DATE(dateTime(l));
+
+number 'Number' = ABSTRACT STRING[31] (CostLedger) MATERIALIZED;
+
+location 'Location' = ABSTRACT Location (CostLedger) MATERIALIZED;
+nameLocation 'Location' (CostLedger l) = name(location(l));
+
+product 'Product' = ABSTRACT Product (CostLedger) MATERIALIZED;
+nameProduct 'Product' (CostLedger l) = name(product(l));
+
+INDEX location(CostLedger l), product(l), dateTime(l), l;
+
+CLASS InCostLedger 'Cost ledger (income)' : CostLedger;
+
+quantity '{Quantity}' = ABSTRACT NUMERIC[16,3] (InCostLedger);
+
+dataAmount 'Amount (primary)' = DATA NUMERIC[14,2] (InCostLedger);
+calcAmount 'Amount (calculated)' = ABSTRACT NUMERIC[14,2] (InCostLedger);
+amount '{Amount}' (InCostLedger l) = OVERRIDE dataAmount(l), calcAmount(l); 
+
+price 'Price' (InCostLedger il) = amount(il) / quantity(il);
+
+CLASS OutCostLedger 'Cost ledger (outcome)' : CostLedger;
+
+quantity '{Quantity}' = ABSTRACT NUMERIC[16,3] (OutCostLedger);
+
+amount '{Amount}' = DATA NUMERIC[14,2] (OutCostLedger);
+price 'Price' (OutCostLedger il) = amount(il) / quantity(il);
+
+signedQuantity '{Quantity}' (CostLedger l) = MULTI quantity[InCostLedger](l), -quantity[OutCostLedger](l) MATERIALIZED;
+signedAmount '{Amount}' (CostLedger l) = MULTI amount[InCostLedger](l), -amount[OutCostLedger](l) MATERIALIZED;
+
+negSignedQuantity (CostLedger l) = -signedQuantity(l);
+
+countLedger (Location l, Product p) =
+    GROUP SUM 1 IF location(CostLedger cl) = l AND product(cl) = p MATERIALIZED;
+    
+costQuantity '{Quantity}' (Location l, Product p) = 
+    GROUP SUM signedQuantity(CostLedger cl) IF location(cl) = l AND product(cl) = p MATERIALIZED;
+costAmount 'Cost' (Location l, Product p) = 
+    GROUP SUM signedAmount(CostLedger cl) IF location(cl) = l AND product(cl) = p MATERIALIZED;
+costPrice 'Unit cost' (Location l, Product p) = costAmount(l, p) / costQuantity(l, p);
+
+costQuantity '{Quantity}' (Location l, Product p, DATETIME dt) = 
+    costQuantity(l, p) (-) (GROUP SUM signedQuantity(CostLedger cl) IF location(cl) = l AND product(cl) = p AND dateTime(cl) >= dt);
+costAmount 'Cost' (Location l, Product p, DATETIME dt) = 
+    costAmount(l, p) (-) (GROUP SUM signedAmount(CostLedger cl) IF location(cl) = l AND product(cl) = p AND dateTime(cl) >= dt);
+costPrice 'Unit cost' (Location l, Product p, DATETIME dt) = costAmount(l, p, dt) / costQuantity(l, p, dt); 
+
+costQuantity '{Quantity}' (Product p) = GROUP SUM costQuantity(Location l, p);
+costAmount 'Cost' (Product p) = GROUP SUM costAmount(Location l, p);
+costPrice 'Unit cost' (Product p) = costAmount(p) / costQuantity(p);
+
+costQuantity '{Quantity}' (Product p, DATETIME dt) = GROUP SUM costQuantity(Location l, p, dt);
+costAmount 'Cost' (Product p, DATETIME dt) = GROUP SUM costAmount(Location l, p, dt);
+costPrice 'Unit cost' (Product p, DATETIME dt) = costAmount(p, dt) / costQuantity(p, dt);
+
+overCost 'Cost' (Item i, DATETIME dt) = NUMERIC[14,2](OVERRIDE costPrice(i, dt), cost(i, DATE(dt)));
+
+quantity 'Spent' = DATA NUMERIC[16,3] (OutCostLedger, InCostLedger);
+costed 'Spent' (InCostLedger il) = GROUP SUM quantity(OutCostLedger ol, il) MATERIALIZED;
+notCosted 'Not spent' (InCostLedger il) = quantity(il) (-) costed(il) MATERIALIZED; 
+
+costed 'Spent' (OutCostLedger ol) = GROUP SUM quantity(ol, InCostLedger il) MATERIALIZED;
+
+calcCost = DATA LOCAL NESTED BOOLEAN (CostLedger);
+
+calculateCost () {
+    // standard price
+    amount (OutCostLedger ol) <- NUMERIC[14,2](negSignedQuantity(ol) * cost(product(ol), date(ol))) 
+        WHERE calcCost(ol) AND costingMethod(product(ol)) = CostingMethod.standardPrice;
+
+    dataAmount (InCostLedger il) <- NUMERIC[14,2](signedQuantity(il) * cost(product(il), date(il))) IF costingMethod(product(il)) = CostingMethod.standardPrice
+        WHERE calcCost(il);
+
+    // fifo / average
+    quantity(OutCostLedger out, InCostLedger in) <- NULL WHERE calcCost(out);
+
+    LOCAL ordered = INTEGER (OutCostLedger); 
+    ordered(OutCostLedger ledger) <- PARTITION SUM 1 IF calcCost(ledger) 
+                                               ORDER dateTime(ledger), ledger 
+                                               BY product(ledger);
+
+    FOR iterate(INTEGER i, 1, (GROUP MAX ordered(OutCostLedger ledger))) DO {
+        LOCAL iteration = BOOLEAN (OutCostLedger);
+        iteration(OutCostLedger l) <- ordered(l) = i;
+        
+        quantity(OutCostLedger ol, InCostLedger il) <- (PARTITION UNGROUP negSignedQuantity
+                                                                  LIMIT STRICT (OVERRIDE notCosted(il), 0.0) IF location(ol) = location(il) 
+                                                                                     AND product(ol) = product(il) 
+//                                                                                     AND dateTime(il) <= dateTime(ol) 
+                                                                  ORDER dateTime(il), il
+                                                                  BY ol)
+                                                       WHERE iteration(ol) AND signedQuantity(ol) <= 0;
+                                                       
+        quantity(OutCostLedger ol, InCostLedger il) <- -(PARTITION UNGROUP signedQuantity
+                                                                   LIMIT STRICT (OVERRIDE costed(il), 0.0) IF location(ol) = location(il) 
+                                                                                     AND product(ol) = product(il) 
+//                                                                                     AND dateTime(il) <= dateTime(ol) 
+                                                                   ORDER DESC dateTime(il), il
+                                                                   BY ol)
+                                                       WHERE iteration(ol) AND signedQuantity(ol) > 0;
+
+        amount (OutCostLedger ol) <- NUMERIC[14,2](negSignedQuantity(ol) * costPrice(location(ol), product(ol), dateTime(ol)))
+            WHERE iteration(ol) AND costingMethod(product(ol)) = CostingMethod.avco;
+    }
+    
+    amount (OutCostLedger ol) <- NUMERIC[14,2](GROUP SUM quantity(ol, InCostLedger il) * price(il)) 
+        WHERE calcCost(ol) AND costingMethod(product(ol)) = CostingMethod.fifo;
+}
+
+ON {
+    calcCost (CostLedger l) <- CHANGED(location(l)) OR CHANGED(product(l)) OR CHANGED(signedQuantity(l));
+    IF GROUP SUM 1 IF calcCost(CostLedger l) THEN 
+        NEWSESSION SINGLE {
+            calculateCost();
+        }
+}
+
+FORM dialogCost 'Costing parameters'
+    OBJECTS d = DATE PANEL
+    PROPERTIES 'Date from which to recalculate' = VALUE(d)
+;
+
+toRecalculateCost = DATA LOCAL BOOLEAN (Location);
+toRecalculateCost = DATA LOCAL BOOLEAN (Product);
+
+recalculateCost 'Recalculate cost' (DATE d) {
+    NEWSESSION NESTED (toRecalculateCost[Location], toRecalculateCost[Product]) {
+        calcCost(CostLedger l) <- dateTime(l) >= DATETIME(d) AND
+            (toRecalculateCost(location(l)) OR NOT GROUP SUM 1 IF toRecalculateCost(Location lc)) AND
+            (toRecalculateCost(product(l)) OR NOT GROUP SUM 1 IF toRecalculateCost(Product p));
+        calculateCost();
+        APPLY;
+    }
+}
+
+recalculateCost 'Recalculate cost' () {
+    DIALOG dialogCost OBJECTS d INPUT DO {
+        recalculateCost(d);
+    }
+}
+
+recalculateCost 'Recalculate cost' (Location l, Product p) {
+    toRecalculateCost(Location ll) <- ll = l;
+    toRecalculateCost(Product pp) <- pp = p;
+    DIALOG dialogCost OBJECTS d INPUT DO {
+        recalculateCost(d);
+    }
+}

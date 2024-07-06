@@ -1,0 +1,12 @@
+MODULE ReceiptFilter;
+
+REQUIRE Receipt;
+
+NAMESPACE Inventory;
+
+@defineDateFilterForm(receipts, r, scheduled);
+
+// right pane
+@defineDocFilter(receipt, ReceiptType, type, r, 'Type');
+@defineDocFilter(receipt, Location, location, r, 'Location');
+@defineDocFilter(receipt, Partner, vendor, r, 'Vendor');

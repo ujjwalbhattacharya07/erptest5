@@ -1,0 +1,41 @@
+MODULE ManufacturingOrderCanceled;
+
+REQUIRE ManufacturingOrderDone;
+
+NAMESPACE Manufacturing;
+
+EXTEND CLASS ManufacturingOrderStatus {
+    canceled 'Cancelled'
+}
+
+canceled 'Cancelled' = DATA BOOLEAN (ManufacturingOrder);
+active '{Active}' (ManufacturingOrder o) = done(o) AND NOT canceled(o);
+started (ManufacturingOrder o) = NOT status(o) = ManufacturingOrderStatus.draft AND NOT canceled(o);
+
+cancel 'Cancel' (ManufacturingOrder m) {
+    APPLY; 
+       IF canceled() THEN RETURN;
+           
+       NEWSESSION {
+           canceled(m) <- TRUE;
+           inProgress(m) <- NULL;
+           APPLY;
+       }
+}
+
+status(ManufacturingOrder m) += WHEN canceled(m) THEN ManufacturingOrderStatus.canceled;
+color(ManufacturingOrderStatus m) += WHEN m = ManufacturingOrderStatus.canceled THEN RGB(181,195,247);
+
+EXTEND FORM manufacturingOrder
+    PROPERTIES(o) cancel SHOWIF NOT (status(o) = ManufacturingOrderStatus.draft OR status(o) = ManufacturingOrderStatus.canceled), 
+                            canceled SHOWIF status(o) = ManufacturingOrderStatus.canceled READONLY 
+;
+
+DESIGN manufacturingOrder {
+    secondaryActions {
+        MOVE PROPERTY(cancel(o));
+    }             
+    status {
+        MOVE PROPERTY(canceled(o));                               
+    }    
+}

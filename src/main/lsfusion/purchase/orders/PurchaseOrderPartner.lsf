@@ -1,0 +1,22 @@
+MODULE PurchaseOrderPartner;
+
+REQUIRE PurchaseOrder;
+
+NAMESPACE Purchase;
+
+EXTEND FORM partner
+    OBJECTS pl = Order
+    PROPERTIES(pl) READONLY number, dateTime, imagedNameStatus BACKGROUND colorStatus(pl), scheduledDateTime, nameLocation
+    PROPERTIES(pl) READONLY untaxedAmount, taxAmount, amount
+    PROPERTIES(pl) NEWSESSION EDIT
+    FILTERS vendor(pl) = p
+;
+
+DESIGN partner {
+    tabs {
+        NEW pOrders {
+            caption = 'Purchase orders';
+            MOVE BOX(pl);
+        }
+    }
+}

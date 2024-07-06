@@ -1,0 +1,43 @@
+MODULE ManufacturingOrderWaiting;
+
+REQUIRE ManufacturingOrder, ManufacturingOrderSelection;
+
+NAMESPACE Manufacturing;
+
+EXTEND CLASS ManufacturingOrderStatus {
+    waiting 'Waiting'
+}
+waiting 'Waiting' = DATA BOOLEAN (ManufacturingOrder);
+
+status (ManufacturingOrder s) += WHEN waiting(s) THEN ManufacturingOrderStatus.waiting;
+color (ManufacturingOrderStatus s) += WHEN s = ManufacturingOrderStatus.waiting THEN RGB(250,150,157);
+
+markAsToDo 'Mark as Todo' (ManufacturingOrder s) {
+    APPLY; 
+    IF canceled() THEN RETURN;
+    
+    NEWSESSION {
+        waiting(s) <- TRUE;
+        APPLY;
+    }
+}
+
+EXTEND FORM manufacturingOrder
+    PROPERTIES(o) markAsToDo SHOWIF status(o) = ManufacturingOrderStatus.draft, waiting 
+;
+
+DESIGN manufacturingOrder {
+    primaryActions {
+        MOVE PROPERTY(markAsToDo(o)) { fontStyle = 'bold'; }
+    }                
+    status {
+        MOVE PROPERTY(waiting(o));                               
+    }
+}
+
+EXTEND FORM manufacturingOrders    
+    EXTEND FILTERGROUP status
+        FILTER 'Waiting' status(o) = ManufacturingOrderStatus.waiting    
+;
+
+@defineSelectionAction(manufacturingOrders, ManufacturingOrder, markAsToDo, 'Mark as Todo', statuses);

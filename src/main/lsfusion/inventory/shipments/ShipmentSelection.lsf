@@ -1,0 +1,13 @@
+MODULE ShipmentSelection;
+
+REQUIRE Shipment, Selection;
+
+NAMESPACE Inventory;
+
+@defineSelection(Shipment);
+
+@defineSelectionForm(shipments, Shipment, s);
+
+@defineSelectionCopyDateTime(shipments, Shipment, scheduledDateTime, '(scheduled)');
+
+@defineSelectionDelete(shipments, Shipment);

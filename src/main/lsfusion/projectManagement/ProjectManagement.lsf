@@ -1,0 +1,16 @@
+MODULE ProjectManagement;
+
+REQUIRE Project, ProjectFilter,
+        ProjectAssignment,
+        ProjectTimeEntry,
+        ProjectTask, TaskWorkflow,
+        ProjectPurchaseOrder,
+        ProjectBill, ProjectPurchaseOrderBill,
+        ProjectReceipt, ProjectPurchaseOrderReceipt,
+        ProjectSalesOrder,
+        ProjectInvoice, ProjectTimeEntryInvoice, ProjectSalesOrderInvoice,
+        ProjectSalesLedgerInvoice, ProjectSalesLedgerReport,
+        ProjectShipment, ProjectInvoiceShipment, ProjectSalesOrderShipment,
+        ProjectManufacturingOrder,
+        Shift, ProjectShift,
+        TimesheetSupervisor, TimesheetSupervisorMobile;

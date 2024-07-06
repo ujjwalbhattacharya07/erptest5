@@ -1,0 +1,10 @@
+MODULE BillReceiptInitial;
+
+REQUIRE BillReceipt;
+
+NAMESPACE Invoicing;
+
+// initial data
+loadDefaultData () + {
+    receiptType(BillType t) <- receiptType('receipt') WHERE id(t) = 'bill'; 
+}

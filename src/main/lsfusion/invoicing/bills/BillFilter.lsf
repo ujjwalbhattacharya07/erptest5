@@ -1,0 +1,11 @@
+MODULE BillFilter;
+
+REQUIRE Bill;
+
+NAMESPACE Invoicing;
+
+@defineDateFilterForm(bills, b);
+
+// right pane
+@defineDocFilter(bill, BillType, type, b, 'Type');
+@defineDocFilter(bill, Partner, vendor, b, 'Vendor');

@@ -1,0 +1,89 @@
+MODULE MetaTax;
+
+META defineTaxCalc(doc, let, prefix, price)
+    untaxedAmount '{Amount}'  = DATA NUMERIC[14,2] (###doc##Line);
+    
+    WHEN LOCAL CHANGED(quantity(###doc##Line l)) OR CHANGED(price(l)) DO {
+        untaxedAmount(l) <- NUMERIC[14,2](quantity(l) * price(l));
+    }
+    
+    // taxes for line
+    in 'On' = DATA BOOLEAN (###doc##Line, Tax);
+    WHEN LOCAL CHANGED(item(###doc##Line l)) DO
+        in(l, Tax t) <- prefix##In(item(l), t) WHERE prefix##CountIn(item(l), taxGroup(t));
+
+    changeTax (###doc##Line l) {
+        REQUEST {
+            setTax (Tax t) <- in(l, t);
+            DIALOG changeTax; 
+        } DO in(l, Tax t) <- setTax(t);
+    } 
+     
+    // amount    
+    taxAmount 'Taxes' (Tax t, ###doc##Line l) = DATA NUMERIC[14,2] (Tax, ###doc##Line);
+    
+    taxIncluded = ABSTRACT BOOLEAN (###doc##Line);
+    WHEN LOCAL CHANGED(untaxedAmount(###doc##Line l) IF in(l, Tax t)) AND value(t) AND NOT CHANGED(taxAmount(t, l)) DO
+        taxAmount (t, l) <- NUMERIC[14,2] (value(t) / (100 (+) (value(t) IF taxIncluded(l))) * untaxedAmount(l));
+    
+    CONSTRAINT (DROPPED(Tax t IS Tax) AND PREV(taxAmount(t, ###doc##Line l))) 
+                                                            MESSAGE 'You cannot remove tax involved in calculations';
+    
+    taxAmount 'Taxes' (###doc##Line l) = GROUP SUM taxAmount(Tax t, l) IF in(l, t);
+    taxPercent 'Taxes,%' (###doc##Line l) = GROUP SUM value(Tax t) IF in(l, t);
+    countTaxes (###doc##Line l) = GROUP SUM 1 IF in(l, Tax t);
+    taxes 'Taxes' (###doc##Line l) = GROUP CONCAT name(Tax t) IF in(l, t), ', ' ORDER t CHARWIDTH 8;
+
+    amount 'Total amount' (###doc##Line l) = untaxedAmount(l) (+) (taxAmount(l) IF NOT taxIncluded(l));
+    
+    // taxes for document
+    taxCount (###doc let, Tax t) = GROUP SUM 1 IF in(###doc##Line l, t) AND doc(l) = let;
+    taxAmount 'Tax' (Tax t, ###doc let) = 
+        GROUP SUM taxAmount(t, ###doc##Line l) IF doc(l) = let AND in(l, t);
+    
+    untaxedAmount '{Amount}' (###doc let) = GROUP SUM untaxedAmount(###doc##Line l) IF doc(l) = let;
+
+    taxAmount 'Tax' (###doc let) = GROUP SUM taxAmount(Tax t, let);
+
+    amount 'Total amount' (###doc let) = GROUP SUM amount(###doc##Line l) IF doc(l) = let;
+END
+
+META defineTaxCalc(doc, let, prefix)
+    @defineTaxCalc(doc, let, prefix, price);
+END
+
+META defineDocTaxForm(doc, let)
+    EXTEND FORM doc  
+        PROPERTIES(l) untaxedAmount
+            
+        OBJECTS t = Tax
+        PROPERTIES name(t) READONLY, taxAmount(t, let) READONLY, taxAmount(t, l) READONLYIF readonly(let)
+        FILTERS taxCount(let, t)
+                
+        PROPERTIES(let) READONLY untaxedAmount, taxAmount, amount
+    ;
+        
+    DESIGN doc {
+        linesFooter {
+            NEW taxes {           
+                fill = 1;
+                MOVE BOX(t) { 
+                    caption = 'Taxes'; 
+                    GRID(t) { headerHeight = 24; } 
+                }
+                REMOVE TOOLBARBOX(t);
+            }
+            NEW total {
+                caption = 'Total for the document';
+                MOVE PROPERTY(untaxedAmount(let));                
+                MOVE PROPERTY(taxAmount(let));                
+                MOVE PROPERTY(amount(let));                
+            }
+        }
+    }
+        
+    EXTEND FORM doc##s 
+        PROPERTIES(let) READONLY untaxedAmount, taxAmount, amount     
+    ;
+END
+

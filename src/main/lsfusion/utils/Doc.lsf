@@ -1,0 +1,479 @@
+MODULE Doc;
+
+REQUIRE Authentication, Time, BarCode, ItemAttribute, Icon;
+
+NAMESPACE Utils;
+
+META defineDocObjectsForm (form, obj, title)
+    DESIGN form {
+        OBJECTS {
+            NEW pane {
+                fill = 1;
+                horizontal = TRUE;
+                NEW tabbedPane {
+                    tabbed = TRUE;
+                    fill = 1;
+                    MOVE BOX(obj) { caption = title; }
+                }
+                NEW rightPane {
+                    NEW filters {
+                        caption = 'Filters';
+                        alignment = STRETCH;
+                        MOVE FILTERGROUPS(obj) {
+                            horizontal = FALSE;
+                            alignment = STRETCH;
+                        }
+                    }
+                    NEW actions {
+                        alignment = STRETCH;
+                        caption = 'Actions';
+                    }
+                    NEW statuses {
+                        alignment = STRETCH;
+                        caption = 'Statuses';
+                    }
+                }
+            }
+        }
+    }
+END
+
+META defineDocStatus (doc, title)
+    CLASS ###doc##Status title##' status' {
+        draft 'Draft'
+    }
+    
+    name '{First_name}' (###doc##Status s) = staticCaption(s) IF s IS ###doc##Status CHARWIDTH 12;
+    imagedName '{First_name}' (###doc##Status s) = imagedCaption(s) IF s IS ###doc##Status CHARWIDTH 12;
+
+    color 'Color' = ABSTRACT CASE COLOR (###doc##Status) MATERIALIZED;
+    color (###doc##Status s) += WHEN s = ###doc##Status.draft THEN RGB(187,242,210);
+
+    status 'Status' = ABSTRACT CASE ###doc##Status (###doc) MATERIALIZED INDEXED;
+    nameStatus 'Status' (###doc d) = name(status(d));
+    imagedNameStatus 'Status' (###doc d) = imagedName(status(d));
+    colorStatus 'Color' (###doc d) = color(status(d));
+    
+    status(###doc d) += WHEN d IS ###doc THEN ###doc##Status.draft;
+    
+    readonly = ABSTRACT CASE BOOLEAN (###doc);
+END
+
+META defineDocStatusForm (doc, let, beforeProp)
+    EXTEND FORM doc##s
+        PROPERTIES(##let) READONLY imagedNameStatus BACKGROUND colorStatus(##let) BEFORE beforeProp(##let)
+        FILTERGROUP status
+            FILTER 'Draft' status(##let) = ###doc##Status.draft
+    ;
+    
+    DESIGN doc##s {
+        filters {
+            MOVE FILTERGROUP(status) { alignment = STRETCH; }
+        }
+    }
+    
+    EXTEND FORM doc
+        PROPERTIES(##let) READONLY imagedNameStatus BACKGROUND colorStatus(##let)
+    ;
+    
+    DESIGN doc {
+        NEW statusPane FIRST {
+            caption = 'Statuses';
+            horizontal = TRUE;
+            alignment = STRETCH;                          
+            NEW statusActions {
+                horizontal = TRUE;                    
+                flex = 1; 
+                NEW primaryActions {
+                    horizontal = TRUE;
+                }
+                NEW secondaryActions {
+                    horizontal = TRUE;
+                }           
+            }
+            NEW status {
+                horizontal = TRUE;
+                MOVE PROPERTY(imagedNameStatus(##let));
+            }
+        }    
+    } 
+END
+
+META defineDocStatusForm (doc, let)
+    @defineDocStatusForm(doc, let, nameType);
+END
+
+META defineDocSearchAction (doc, docLine, it, fun, capt)
+    fun capt (###doc i, ###it p) = 
+        GROUP SUM fun(docLine l) BY doc(l), it(l);
+    
+    set###fun (###doc i, ###it p, NUMERIC[14,3] q) {
+        IF last##docLine(i, p) THEN {
+            IF q THEN
+                fun(docLine l) <- q IF l = last##docLine(i, p)
+                    WHERE doc(l) = i AND it(l) = p;
+            ELSE
+                DELETE docLine l WHERE doc(l) = i AND it(l) = p;
+        } ELSE
+            IF q THEN
+                NEW l = docLine{
+                    doc(l) <- i;
+                    it(l) <- p;
+                    fun(l) <- q;
+                }
+    
+    }
+    
+    change###fun (###doc i, ###it p) {
+        INPUT q = NUMERIC[14,3] DO
+            set###fun(i, p, q);
+    }
+END
+
+META defineDocSearchAction (doc, it, fun, capt)
+    @defineDocSearchAction (doc, ###doc##Line, it, fun, capt);
+END
+
+META defineDocSearchTab (doc, it)
+    EXTEND FORM doc
+        TREE categories c = Category PARENT parent(c)
+        PROPERTIES READONLY name(c)
+        ORDERS name(c)
+        FILTERGROUP activeCategory
+            FILTER '{Active}' active(c) DEFAULT
+        
+        OBJECTS itm = ###it
+        PROPERTIES(itm) READONLY name, nameUom, idBarCode, id, reference
+        PROPERTIES(itm) NEWSESSION EDIT
+        ORDERS name(itm)
+        FILTERS level(category(itm), c)
+        FILTERGROUP active
+            FILTER '{Active}' active(itm) 'F10' DEFAULT  
+    ;
+
+    @defineItemAttributeForm(doc, itm, itm);
+        
+    DESIGN doc {
+        details {
+            NEW search {
+                caption = 'Search';
+                horizontal = TRUE;
+                fill = 1;
+                NEW filters {
+                    fill = 1;
+                    tabbed = TRUE;
+                    MOVE BOX(TREE categories) { caption = 'Categories'; }
+                    MOVE BOX(ia) { caption = 'Attributes'; }
+                }
+                MOVE BOX(itm) { 
+                    fill = 2;
+                }
+            }
+        }
+    }
+END
+
+META defineDocSearch (doc, it, fun, capt, let)
+    last###doc##Line (###doc i, ###it p) = GROUP LAST ###doc##Line l ORDER l BY doc(l), it(l);
+
+    @defineDocSearchAction(doc, it, fun, capt);
+    @defineDocSearchTab(doc, it);
+    
+    EXTEND FORM doc
+        PROPERTIES(let, itm) fun ON CHANGE change###fun(let, itm) READONLYIF readonly(let)
+    ;
+    DESIGN doc {
+        PROPERTY(fun(let, itm)) { background = #EEEEFF; }
+    }        
+END
+
+META defineDocSearch (doc, it, fun, capt, let, check)
+    @defineDocSearch(doc, it, fun, capt, let);
+    
+    EXTEND FORM doc
+        FILTERS ##check(itm)
+    ;
+END
+
+disableHistory 'Disable history recording' = DATA BOOLEAN () PREREAD;
+EXTEND FORM System.options 
+    PROPERTIES() disableHistory
+;
+DESIGN System.options {
+    commons { 
+        MOVE PROPERTY(disableHistory()); 
+    }
+}
+
+META defineHistoryProperty(obj, prop, capt, nameProp)
+    WHEN SETCHANGED(prop(###obj let)) AND NOT disableHistory() DO {
+        NEW l = ###obj##History {
+            obj(l) <- let;
+            dateTime(l) <- currentDateTime();
+            user(l) <- currentUser();
+            computer(l) <- currentComputer();
+            type(l) <- capt;
+            description (l) <- CONCAT ' -> ', PREV(nameProp(let)), nameProp(let);
+        }
+    }
+END
+
+META defineHistoryProperty(obj, prop, capt)
+    @defineHistoryProperty(obj, prop, capt, prop);
+END
+
+META defineDocHistoryLineProperty(doc, docLine, prop, capt, descrProp)
+    WHEN CHANGED(prop(docLine l)) AND doc(l) = ###doc d
+        AND NOT status(d) = ###doc##Status.draft AND NOT disableHistory() DO {
+        NEW h = ###doc##History {
+            doc(h) <- d;
+            dateTime(h) <- currentDateTime();
+            user(h) <- currentUser();
+            type(h) <- capt;
+            description (h) <- '' + index(l) + '. ' + (CONCAT ', ', descrProp(l), (CONCAT ' -> ', PREV(prop(l)), prop(l)));
+        }
+    }
+END
+
+META defineDocHistoryHeader(doc, let, dateProp)
+    CLASS ###doc##History 'Change history';
+
+    doc = DATA ###doc (###doc##History) INDEXED;
+    countHistories (###doc d) = GROUP SUM 1 IF doc(###doc##History h) = d;
+    
+    dateTime 'Date' = DATA DATETIME (###doc##History);
+
+    user = DATA User (###doc##History);
+    nameUser 'User' (###doc##History l) = name(user(l));
+
+    computer = DATA Computer (###doc##History);
+    hostnameComputer 'Computer' (###doc##History l) = hostname(computer(l)) CHARWIDTH 10;
+
+    type 'Type' = DATA ISTRING[100] (###doc##History) CHARWIDTH 15;
+    description 'Description' = DATA TEXT (###doc##History);
+
+    @defineHistoryProperty(doc, status, 'Status', nameStatus);
+
+    @defineHistoryProperty(doc, number, 'Number');
+
+    @defineHistoryProperty(doc, dateProp, 'Date');
+END
+
+META defineDocHistoryLine(doc, docLine, class)
+
+    WHEN SETCHANGED(docLine l IS docLine) AND doc(l) = ###doc d
+        AND NOT status(d) = ###doc##Status.draft AND NOT disableHistory() DO {
+        NEW h = ###doc##History {
+            doc(h) <- d;
+            dateTime(h) <- currentDateTime();
+            user(h) <- currentUser();
+            computer(h) <- currentComputer();
+            type(h) <- 'Added line';
+            description (h) <- '' + index(l);
+        }
+    }
+
+    WHEN DROPPED(docLine l IS docLine) AND PREV(doc(l)) = ###doc d
+        AND NOT status(d) = ###doc##Status.draft AND NOT disableHistory() DO {
+        NEW h = ###doc##History {
+            doc(h) <- d;
+            dateTime(h) <- currentDateTime();
+            user(h) <- currentUser();
+            computer(h) <- currentComputer();
+            type(h) <- 'Removed line';
+            description (h) <- '' + PREV(index(l));
+        }
+    }
+
+    WHEN CHANGED(class(docLine l)) AND doc(l) = ###doc d
+        AND NOT status(d) = ###doc##Status.draft AND NOT disableHistory() DO {
+        NEW h = ###doc##History {
+            doc(h) <- d;
+            dateTime(h) <- currentDateTime();
+            user(h) <- currentUser();
+            computer(h) <- currentComputer();
+            type(h) <- 'Product changed';
+            description (h) <- '' + index(l) + (CONCAT ' -> ', PREV(name###class(l)), name###class(l));
+        }
+    }
+
+END
+
+META defineDocHistoryLine(doc, class)
+    @defineDocHistoryLine(doc, ###doc##Line, class);
+END
+
+META defineDocHistoryForm(doc, form, let)
+    EXTEND FORM form
+        OBJECTS doc##l = ###doc##History
+        PROPERTIES(doc##l) READONLY dateTime, nameUser, hostnameComputer, type, description, pdescription = description PANEL
+        FILTERS doc(doc##l) = let
+    ;
+
+    DESIGN form {
+        details {
+            NEW history {
+                caption = badged('History', countHistories(let));
+                fill = 1;
+                horizontal = TRUE;
+                MOVE BOX(doc##l) {
+                    fill = 2;
+                    caption = '';
+                    PROPERTY(description(doc##l)) { valueHeight = 18; }
+                }
+                MOVE PROPERTY(pdescription) { panelCaptionVertical = TRUE; fill = 1; }
+            }
+        }
+    }
+END
+
+META defineDocHistory(doc, let, class, dateProp)
+
+    @defineDocHistoryHeader(doc, ##let, dateProp);
+    @defineDocHistoryLine(doc, class);
+    @defineDocHistoryForm(doc, doc, let);
+
+END
+
+META defineDocHistory(doc, let, class)
+    @defineDocHistory(doc, let, class, dateTime);
+END
+
+META defineDocRelation(docTo, docFrom, captTo, captFrom, objTo, objFrom)
+    docTo = DATA ###docTo (###docFrom) INDEXED;
+    numberDate###docTo captTo (###docFrom s) = numberDate(docTo(s)); 
+    
+    count###docFrom (###docTo t) = GROUP SUM 1 IF docTo(###docFrom f) = t;
+    
+    // form
+    open###docTo (###docFrom f) { 
+        edit(docTo(f)); 
+    }
+    EXTEND FORM docFrom
+        PROPERTIES(objFrom) numberDate###docTo ON CHANGE open###docTo(objFrom) SHOWIF docTo(objFrom)
+    ;
+    DESIGN docFrom {
+        footer {
+            MOVE PROPERTY(numberDate###docTo(objFrom));
+        }
+    }
+    EXTEND FORM docFrom##s
+        PROPERTIES(objFrom) READONLY numberDate###docTo
+    ;
+END
+
+META defineDocLineRelation(docTo, docFrom, docFromLine, captTo, captFrom, objTo, objFrom)
+    docTo##Line = DATA ###docTo##Line (###docFromLine) INDEXED;
+    
+    in (###docTo i, ###docFrom s) = GROUP SUM 1 IF docTo(docTo##Line(###docFromLine l)) = i AND docFrom(l) = s MATERIALIZED; 
+    
+    count###docTo (###docFrom s) = GROUP SUM 1 IF in(###docTo i, s) MATERIALIZED;
+    count###docFrom##s (###docTo i) = GROUP SUM 1 IF in(i, ###docFrom s) MATERIALIZED;
+    numberDate###docTo captTo (###docFrom s) = GROUP CONCAT numberDate(###docTo i) IF in(i, s), ',' ORDER i CHARWIDTH 30; 
+    numberDate###docTo##Line captTo (###docFromLine s) = numberDate(docTo##Line(s)); 
+
+    numberDate###docFrom##s captFrom (###docTo s) = GROUP CONCAT numberDate(###docFrom i) IF in(s, i), ',' ORDER i CHARWIDTH 30;
+
+    count###docFromLine (###docTo##Line b) = GROUP SUM 1 IF docTo##Line(###docFromLine l) = b;
+    count###docFromLine (###docTo b) = GROUP SUM 1 IF docTo(docTo##Line(###docFromLine l)) = b;
+    
+    // form
+    open###docTo (###docFrom s) { 
+        FOR in(###docTo i, s) DO 
+            edit(i); 
+    }
+    EXTEND FORM docFrom
+        PROPERTIES(objFrom) numberDate###docTo ON CHANGE open###docTo(objFrom) SHOWIF count###docTo(objFrom)
+    ;
+    DESIGN docFrom {
+        footer {
+            MOVE PROPERTY(numberDate###docTo(objFrom));
+        }
+    }
+    EXTEND FORM docFrom##s
+        PROPERTIES(objFrom) READONLY numberDate###docTo
+    ;
+    EXTEND FORM docTo##s
+        PROPERTIES(objTo) READONLY numberDate###docFrom##s
+    ;
+END
+
+META defineDocLineRelation(docTo, docFrom, captTo, captFrom, objTo, objFrom)
+    @defineDocLineRelation(docTo, docFrom, docFrom##Line, captTo, captFrom, objTo, objFrom);
+END
+META defineDocDiscount (doc)
+    discount 'Discount, %' = DATA NUMERIC[5,2] (###doc##Line);
+    
+    discountPrice 'Discount price' = DATA NUMERIC[10,2] (###doc##Line);
+    resultPrice 'Final price' (###doc##Line l) = OVERRIDE discountPrice(l), price(l);
+    
+    WHEN LOCAL (CHANGED(price(###doc##Line l)) OR CHANGED(discount(l))) AND NOT CHANGED(discountPrice(l)) DO 
+        discountPrice(l) <- NUMERIC[10,2] (price(l) * (100.0 - discount(l)) / 100.0);
+    
+    recalcDiscount (###doc##Line l) { 
+        discount(l) <- NUMERIC[5,2](min(100.0 - (discountPrice(l) * 100.0 / price(l)), 100.0));
+    }
+    changeDiscountPrice (###doc##Line l) {
+        INPUT p = discountPrice(l) CHANGE DO {
+            recalcDiscount(l);
+        } 
+    }
+    
+END
+
+META defineDocDiscountForm (doc)
+    EXTEND FORM doc
+        PROPERTIES(l) AFTER price(l) discount, discountPrice ON CHANGE changeDiscountPrice(l)
+    ;
+END
+
+META defineDocLinesCount(doc, d) 
+    count###doc###Line 'Number of lines' (###doc d) = GROUP SUM 1 IF doc(###doc###Line l) = d MATERIALIZED;
+    
+    DESIGN doc {
+        lines {
+            caption = badged('Lines', count###doc##Line(d));
+        }
+    }
+    EXTEND FORM doc##s PROPERTIES(d) READONLY count###doc###Line;
+END
+
+META defineDocFilter(form, doc, cls, property, obj, capt, filterProperty)
+    doc###property = DATA LOCAL NESTED cls ();
+    name###doc###property capt = name(doc###property());
+
+    EXTEND FORM form
+        PROPERTIES() name###doc###property
+
+        FILTERS filterProperty(obj) = doc###property() OR NOT doc###property()
+    ;
+
+    DESIGN form {
+        filters {
+            MOVE PROPERTY(name###doc###property());
+        }
+    }
+    
+END
+
+META defineDocFilter(doc, cls, property, obj, capt, filterProperty)
+    @defineDocFilter(doc##s, doc, cls, property, obj, capt, filterProperty);
+END
+
+META defineDocFilter(doc, cls, property, obj, capt)
+    @defineDocFilter(doc, cls, property, obj, capt, property);
+END
+
+badgedDoc(STRING caption, STRING number, DATETIME dateTime) = badged(caption, (CONCAT ' ', '№' + number, '(' + dateTime +  ')'));
+
+META defineDocSingleLineForItem(doc, docLine, itemProp)
+    oneLineForItem 'Only one line for one item' = DATA BOOLEAN (###doc##Type);
+    EXTEND FORM doc##Type PROPERTIES(o) oneLineForItem;
+    
+    CONSTRAINT SET([GROUP SUM 1 BY doc(###docLine l), itemProp(l)](###doc d, Item i) > 1) AND oneLineForItem(type(d))
+        MESSAGE 'Only one line for one item';
+END
+
+META defineDocSingleLineForItem(doc, itemProp)
+    @defineDocSingleLineForItem(doc, doc##Line, itemProp);
+END

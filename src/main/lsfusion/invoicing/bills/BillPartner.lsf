@@ -1,0 +1,21 @@
+MODULE BillPartner;
+
+REQUIRE BillDebt;
+
+NAMESPACE Invoicing;
+
+EXTEND FORM partner
+    OBJECTS b = Bill
+    PROPERTIES(b) READONLY number, dateTime, imagedNameStatus, nameType, dueDateTime, note, untaxedAmount, taxAmount, amount, paid
+    PROPERTIES(b) NEWSESSION EDIT
+    FILTERS vendor(b) = p
+;
+
+DESIGN partner {
+    tabs {
+        NEW bills {
+            caption = 'Bills';
+            MOVE BOX(b);
+        }
+    }
+}

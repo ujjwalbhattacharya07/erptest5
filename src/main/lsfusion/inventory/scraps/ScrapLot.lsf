@@ -1,0 +1,14 @@
+MODULE ScrapLot;
+
+REQUIRE ProductLot, ScrapSearch, ScrapInv, InvLedgerLot;
+
+NAMESPACE Inventory;
+
+@defineDocLot (scrap, product, quantity, done, '');
+
+@defineDocBarCodeLot (scrap, product, quantity);
+
+@defineDocDesignLotTab(scrap, quantity, product, linesTab);
+
+//ledger
+quantity(ScrapLine rl, Lot l) += quantity(rl, l);

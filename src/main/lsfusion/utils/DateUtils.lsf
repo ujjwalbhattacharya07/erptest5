@@ -1,0 +1,85 @@
+MODULE DateUtils;
+
+REQUIRE Time;
+
+NAMESPACE Utils;
+
+days (INTERVAL[DATE] i) = daysBetweenDates(to(i), from(i)) + 1;
+prevMonthInterval (INTERVAL[DATE] i) =
+    IF from(i) = firstDayOfMonth(from(i)) AND to(i) = lastDayOfMonth(from(i)) THEN
+        interval(firstDayOfMonth(subtract(from(i), 1)), lastDayOfMonth(subtract(from(i), 1)))
+    ELSE
+        interval(subtract(from(i), days(i)), subtract(to(i), days(i)));
+nextMonthInterval (INTERVAL[DATE] i) =
+    IF from(i) = firstDayOfMonth(from(i)) AND to(i) = lastDayOfMonth(from(i)) THEN
+        interval(firstDayOfMonth(sum(to(i), 1)), lastDayOfMonth(sum(to(i), 1)))
+    ELSE
+        interval(sum(from(i), days(i)), sum(to(i), days(i)));
+
+META defineDateFilterForm(form, let, prefix)
+    EXTEND FORM form
+        OBJECTS dates = INTERVAL[DATE] BEFORE let PANEL NULL
+        PROPERTIES filterDates 'Date interval' = VALUE(dates)
+
+        FILTERS NOT prefix###date(let) < from(dates), NOT prefix###date(let) > to(dates)
+    ;
+    
+    DESIGN form {
+        filters {
+            MOVE PROPERTY(filterDates);
+        }
+    }
+END
+
+META defineDateFilterForm(form, let)
+    @defineDateFilterForm(form, let, );
+END
+
+// aggregations
+
+META defineDateAggregation(cls, prefix, caption)
+    prefix###nameDOW caption##'Day of week' (cls o) = extractDOWName(prefix###date(o));
+    prefix###week caption##'Week' (cls o) = extractWeek(prefix###date(o));
+    
+    prefix###numberMonth caption##'Month number' (cls o) = extractMonthNumber(prefix###date(o));
+    prefix###nameMonth caption##'Month' (cls o) = extractMonthName(prefix###date(o));
+    prefix###year caption##'Year' (cls o) = extractYear(prefix###date(o));
+END
+
+META defineDateAggregation(obj)
+    @defineDateAggregation(obj, , );
+END
+
+META defineDateTimeAggregation(cls, prefix, caption)
+    prefix###date caption##'Date' (cls o) = DATE(prefix###dateTime(o));
+    
+    @defineDateAggregation(cls, prefix, caption);
+
+    prefix###minute caption##'Minute' (cls o) = extractMinute(prefix###dateTime(o));
+    prefix###hour caption##'Hour' (cls o) = extractHour(prefix###dateTime(o));
+END
+
+META defineDateTimeAggregation(obj)
+    @defineDateTimeAggregation(obj, , );
+END
+
+META defineDateAggregationForm(form, let, prefix)
+    EXTEND FORM form
+        PROPERTIES(let) READONLY AFTER prefix###date(let) prefix###nameDOW, prefix###week, prefix###numberMonth, prefix###nameMonth, prefix###year
+    ;
+END
+
+META defineDateAggregationForm(form, let)
+    @defineDateAggregationForm(form, let, );
+END
+
+META defineDateTimeAggregationForm(form, let, prefix)
+    EXTEND FORM form
+        PROPERTIES(let) READONLY AFTER prefix###dateTime(let) prefix###minute, prefix###hour, prefix###date
+    ;
+    @defineDateAggregationForm(form, let, prefix);
+END
+
+META defineDateTimeAggregationForm(form, let)
+    @defineDateTimeAggregationForm(form, let, );
+END

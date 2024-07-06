@@ -1,0 +1,13 @@
+MODULE InvoiceShipmentSearch;
+
+REQUIRE InvoiceShipment;
+
+NAMESPACE Invoicing;
+
+available 'Available' (Invoice i, Product p) = prevAvailableRec(location(i), p); 
+
+EXTEND FORM invoice
+    PROPERTIES(i, itm) READONLY available
+    FILTERGROUP available
+        FILTER 'Available' available(i, itm) OR NOT itm IS Product 'F5' DEFAULT
+;

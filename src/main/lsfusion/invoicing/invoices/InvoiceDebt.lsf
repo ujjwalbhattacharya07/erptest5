@@ -1,0 +1,62 @@
+MODULE InvoiceDebt;
+
+REQUIRE InvoiceDone, InvoiceCanceled, InvoiceContract, InvoiceCurrency, Debt;
+
+NAMESPACE Invoicing;
+
+// extend
+EXTEND CLASS Invoice : OutgoingDebt;
+type(Invoice i) += nameType(i);
+
+active (Invoice i) += active(i);
+number (Invoice i) += number(i);
+dateTime (Invoice i) += dateTime(i);
+dueDateTime (Invoice i) += dueDateTime(i);
+
+partner (Invoice i) += customer(i);
+company (Invoice i) += company(i);
+
+contract (Invoice i) += contract(i);
+
+sourceCurrency (Invoice i) += currency(i);
+sourceAmount (Invoice i) += amount(i);
+
+// pay
+pay 'Match' (IncomingDebt d, Invoice i) {
+    paid(d, i) <- left(d, i) (+) paid(d, i);
+} CHANGEMOUSE 'DBLCLK';
+
+EXTEND FORM invoice
+    PROPERTIES(i) READONLY paid  
+
+    OBJECTS d = IncomingDebt
+    PROPERTIES(d) READONLY dateTime, number, class, type
+    PROPERTIES paid(d, i)
+    FILTERS paid(d, i), active(d)
+    
+    OBJECTS dd = IncomingDebt
+    PROPERTIES(dd) READONLY dateTime, number, class, type, left
+    PROPERTIES pay(dd, i) TOOLBAR
+    FILTERS canBePaid(dd, i), active(dd)
+;
+
+DESIGN invoice {
+    total {
+        MOVE PROPERTY(paid(i));
+    }
+    details {
+        NEW debts {
+            caption = 'Payments matching';
+            MOVE BOX(d) { caption = 'Matched'; }            
+            MOVE BOX(dd) { caption = 'Available'; }          
+        }
+    }
+}
+
+EXTEND FORM invoices   
+    PROPERTIES(i) READONLY paid  
+;
+
+// auto set done
+WHEN SET(amount[Debt](Invoice i) = paid(i)) DO done(i) <- TRUE;
+WHEN DROPPED(amount[Debt](Invoice i) = paid(i)) DO done(i) <- NULL;

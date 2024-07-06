@@ -1,0 +1,13 @@
+MODULE ManufacturingOrderSelection;
+
+REQUIRE ManufacturingOrder, Selection; 
+
+NAMESPACE Manufacturing;
+
+@defineSelection(ManufacturingOrder);
+
+@defineSelectionForm(manufacturingOrders, ManufacturingOrder, o);
+
+@defineSelectionCopyDateTime(manufacturingOrders, ManufacturingOrder, scheduledDateTime, '(scheduled)');
+
+@defineSelectionDelete(manufacturingOrders, ManufacturingOrder);

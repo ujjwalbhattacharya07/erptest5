@@ -1,0 +1,7 @@
+MODULE BillContract;
+
+REQUIRE Bill, Contract;
+
+NAMESPACE Invoicing;
+
+@defineDocContract(bill, b, vendor, headerRight);

@@ -1,0 +1,18 @@
+MODULE SalesOrderSearch;
+
+REQUIRE SalesOrder, ResLedger;
+
+NAMESPACE Sales;
+
+@defineDocSearch(order, item, quantity, 'Quantity', o, canBeSold);
+
+// available
+available 'Available' (Order o, Product p) = prevAvailableRec(location(o), p); 
+
+EXTEND FORM order
+    PROPERTIES(o, itm) READONLY available
+    FILTERGROUP available
+        FILTER 'Available' available(o, itm) OR NOT itm IS Product 'F5' DEFAULT
+;
+
+@defineBarCodeSearch(order, o, l, quantity);

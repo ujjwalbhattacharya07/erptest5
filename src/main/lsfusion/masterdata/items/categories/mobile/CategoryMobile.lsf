@@ -1,0 +1,28 @@
+MODULE CategoryMobile;
+
+REQUIRE Category, Utils, Input;
+
+NAMESPACE MasterData;
+
+// filter
+categoryFilter = DATA LOCAL Category ();
+nameCategoryFilter 'Category' = name(categoryFilter());
+clearCategoryFilter '' () { categoryFilter() <- NULL; } IMAGE 'delete.png';
+
+META defineCategoryFilter(form, obj, container)
+    EXTEND FORM form
+        PROPERTIES() nameCategoryFilter, clearCategoryFilter
+        FILTERS level(category(obj), categoryFilter()) OR NOT categoryFilter()
+    ;
+    DESIGN form {
+        container {
+            NEW categoryFilter {
+                horizontal = TRUE;
+                alignment = STRETCH;
+                MOVE PROPERTY(nameCategoryFilter()) { alignment = STRETCH; }                    
+                MOVE PROPERTY(clearCategoryFilter());
+            }
+        }
+    }
+
+END

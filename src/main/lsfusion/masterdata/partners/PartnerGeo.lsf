@@ -1,0 +1,34 @@
+MODULE PartnerGeo;
+
+REQUIRE Partner;
+
+NAMESPACE MasterData;
+
+latitude 'Latitude'= DATA NUMERIC[11,6] (Partner);
+longitude 'Longitude' = DATA NUMERIC[11,6] (Partner);
+
+EXTEND FORM partner
+    PROPERTIES(p) latitude, longitude
+    
+    OBJECTS pg = Partner MAP
+    PROPERTIES(pg) name READONLY, latitude, longitude
+    FILTERS pg = p
+;
+
+DESIGN partner {
+    tabs {
+        NEW geo {
+            caption = 'Coordinates';
+            NEW coordinates {
+                horizontal = TRUE;
+                MOVE PROPERTY(latitude(p));
+                MOVE PROPERTY(longitude(p));
+            }
+            MOVE BOX(pg) { caption = ''; }
+        }
+    }
+}
+
+EXTEND FORM partners
+    PROPERTIES(p) READONLYIF isReadonly() latitude, longitude
+;

@@ -1,0 +1,12 @@
+MODULE MyCompany;
+
+REQUIRE Eval, ProcessMonitor, Backup,
+        MasterDataP,
+        Inventory,
+        Invoicing, InvoicingInventory,
+        Purchase,
+        Sales,
+        Retail,  
+        Manufacturing,
+        ProjectManagement,
+        BillReceiptCost, BillReceiptCostService; // initialize after Purchase

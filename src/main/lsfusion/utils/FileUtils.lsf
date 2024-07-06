@@ -1,0 +1,90 @@
+MODULE FileUtils;
+
+NAMESPACE Utils;
+
+uploadFile 'Upload' = DATA LOCAL NAMEDFILE ();
+
+META defineObjectFilesForm(object, form, fobj)
+    EXTEND FORM form
+        OBJECTS of = ###object##File
+        PROPERTIES(of) READONLY index
+        PROPERTIES(of) READONLYIF readonly(fobj) name, extension, description
+        PROPERTIES(of) READONLY nameUser, dateTime
+        PROPERTIES(of) GRID open, DELETE READONLYIF readonly(fobj)
+        FILTERS object(of) = fobj
+
+        PROPERTIES = uploadFile() ON CHANGE {
+            INPUT uf = NAMEDFILE DO 
+                IF NOT readonly(fobj) THEN NEW uof = ###object##File {
+                    object(uof) <- fobj;
+                    file(uof) <- RAWFILE(uf);
+                    name(uof) <- name(uf);
+                    extension(uof) <- extension(uf);
+                }
+        }
+    ;
+
+    DESIGN form {
+        details {
+            NEW files {
+                caption = badged('Files', countFiles(fobj));
+                //            caption = badged('Files', countFiles(i)); 
+                horizontal = TRUE;
+                MOVE BOX(of) {
+                    caption = '';
+                }
+                MOVE PROPERTY(uploadFile()) {
+                    panelCaptionVertical = TRUE;
+                    fill = 0.3;
+                }
+            }
+        }
+    }
+END
+
+META defineObjectFiles(object, fobj, classCaption)
+
+    CLASS ###object##File classCaption;
+
+    object = DATA ###object (###object##File) INDEXED NONULL DELETE;
+
+    file = DATA RAWFILE (###object##File);
+
+    name '{Name}' = DATA ISTRING (###object##File) CHARWIDTH 15;
+    extension 'Extension' = DATA ISTRING (###object##File) CHARWIDTH 5;
+    nameExtension (###object##File f) = CONCAT '.', name(f), extension(f);
+
+    description 'Description' = DATA ISTRING (###object##File) CHARWIDTH 30;
+
+    dateTime 'Date' = DATA DATETIME (###object##File);
+    dateTime(###object##File f) <- currentDateTime() WHEN SET(f IS ###object##File);
+
+    user = DATA User (###object##File);
+    nameUser 'User' (###object##File f) = name(user(f));
+    user(###object##File f) <- currentUser() WHEN SET(f IS ###object##File);
+
+    open 'Open' (###object##File f) { open(file(f), nameExtension(f)); } IMAGE 'open.png';
+
+    countFiles 'Files' (###object i) = GROUP SUM 1 IF object(###object##File f) = i;
+
+    index '{Index}' (###object##File f) = PARTITION SUM 1 ORDER f BY object(f) MATERIALIZED;
+    file (###object o, INTEGER i) = GROUP MIN ###object##File f IF object(f) = o AND index(f) = i;
+    openFile(###object o, INTEGER i) { open(file(o, i)); }
+    
+    file1 (###object o) = file(o, 1);
+    file2 (###object o) = file(o, 2);
+    file3 (###object o) = file(o, 3);
+    openFile1 'File 1' (###object o) { openFile(o, 1); }
+    openFile2 'File 2' (###object o) { openFile(o, 2); }
+    openFile3 'File 3' (###object o) { openFile(o, 3); }
+
+    firstFile (###object i) = GROUP MIN ###object##File f IF object(f) = i;
+    openFirstFile 'Open' (###object i) { open(firstFile(i)); }
+    openFiles 'Open' (###object i) {
+        FOR object(###object##File f) = i DO
+            open(f);
+    }
+
+    @defineObjectFilesForm(object, object, fobj);
+
+END

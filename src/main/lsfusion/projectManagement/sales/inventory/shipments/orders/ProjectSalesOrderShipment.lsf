@@ -1,0 +1,9 @@
+MODULE ProjectSalesOrderShipment;
+
+REQUIRE ProjectSalesOrder, SalesOrderShipmentStatus;
+
+NAMESPACE ProjectSales;
+
+EXTEND FORM project
+    PROPERTIES(so) READONLY AFTER imagedNameStatus(so) nameShipmentStatuses BACKGROUND colorShipmentStatus(so)
+;

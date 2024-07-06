@@ -1,0 +1,128 @@
+MODULE BillServiceCost;
+
+REQUIRE MasterData, Bill, BarCode, Utils, ItemCost;
+
+NAMESPACE Invoicing;
+
+// cost allocation base
+CLASS CostAllocationBase 'Distribution base';
+TABLE CostAllocationBase (CostAllocationBase);
+
+name '{Name}' (CostAllocationBase o) = staticCaption(o) IF o IS CostAllocationBase CHARWIDTH 15;
+
+FORM dialogCostAllocationBases 'Distribution base'
+    OBJECTS o = CostAllocationBase
+    PROPERTIES(o) READONLY name
+    
+    LIST CostAllocationBase OBJECT o
+;
+
+EXTEND CLASS CostAllocationBase {
+    amount 'Amount',
+    cost 'Planned cost',
+    salesPrice 'Sales amount',
+    weight 'Weight',
+    volume 'Volume',
+    overallWeight 'Overall weight',
+    quantity 'Quantity'
+}
+
+// item form
+costAllocationBase 'Distribution base' = DATA CostAllocationBase (Service);
+nameCostAllocationBase 'Distribution base' (Service s) = name(costAllocationBase(s));
+
+EXTEND FORM item PROPERTIES nameCostAllocationBase(i); 
+
+DESIGN item {
+    column2 {
+        MOVE PROPERTY(nameCostAllocationBase(i));
+    }
+}
+
+// cost allocation line
+costAllocationBase 'Distribution base' = DATA CostAllocationBase (BillLine);
+nameCostAllocationBase 'Distribution base' (BillLine bsl) = name(costAllocationBase(bsl));
+
+WHEN LOCAL CHANGED(item(BillLine bsl)) DO costAllocationBase(bsl) <- costAllocationBase(item(bsl) AS Service);
+
+// base
+allocationBase (bl, bsl) = ABSTRACT CASE NUMERIC[14,3] (BillLine, CostAllocationBase);
+
+allocationBase (BillLine bl, CostAllocationBase b) += 
+    WHEN item(bl) IS Product AND b = CostAllocationBase.amount THEN NUMERIC[14,3](untaxedAmount(bl));  
+allocationBase (BillLine bl, CostAllocationBase b) += 
+    WHEN item(bl) IS Product AND b = CostAllocationBase.cost THEN NUMERIC[14,3](cost(item(bl), DATE(dateTime(bl))) * quantity(bl)); 
+allocationBase (BillLine bl, CostAllocationBase b) += 
+    WHEN item(bl) IS Product AND b = CostAllocationBase.salesPrice THEN NUMERIC[14,3](salesPrice(item(bl)) * quantity(bl));
+allocationBase (BillLine bl, CostAllocationBase b) += 
+    WHEN item(bl) IS Product AND b = CostAllocationBase.weight THEN NUMERIC[14,3](weight(item(bl)) * quantity(bl));
+allocationBase (BillLine bl, CostAllocationBase b) += 
+    WHEN item(bl) IS Product AND b = CostAllocationBase.volume THEN NUMERIC[14,3](volume(item(bl)) * quantity(bl));
+allocationBase (BillLine bl, CostAllocationBase b) += 
+    WHEN item(bl) IS Product AND b = CostAllocationBase.overallWeight THEN NUMERIC[14,3](max(volume(item(bl)) * 200, weight(item(bl))) * quantity(bl));
+allocationBase (BillLine bl, CostAllocationBase b) +=
+    WHEN item(bl) IS Product AND b = CostAllocationBase.quantity THEN NUMERIC[14,3](quantity(bl));
+
+allocationBase 'Distribution base' (BillLine bl, BillLine bsl) = allocationBase(bl, costAllocationBase(bsl));
+
+serviceLine 'Distribute' = DATA BOOLEAN (BillLine, BillLine);
+costAllocated 'Distributed' = DATA NUMERIC[14,2] (BillLine, BillLine);
+
+costAllocated 'Distributed' (BillLine bsl) = GROUP SUM costAllocated(BillLine bl, bsl) IF serviceLine(bl, bsl);
+
+CONSTRAINT costAllocated(BillLine bsl) AND NOT costAllocated(bsl) <= untaxedAmount(bsl)
+    MESSAGE 'The allocated amount cannot exceed the cost of the service';  
+
+calcCostAllocated 'Distributed' (BillLine bl, BillLine bsl) = PARTITION UNGROUP untaxedAmount
+    PROPORTION STRICT ROUND(2) allocationBase(bl, bsl) IF serviceLine(bl, bsl)
+    ORDER bl BY bsl;
+
+allocate 'Distribute' (BillLine bsl) {
+    costAllocated (BillLine bl, bsl) <- calcCostAllocated(bl, bsl);
+}
+
+service 'Distribute' (Bill b, BillLine bsl) = GROUP MAX serviceLine(BillLine bl, bsl) IF bill(bl) = b;
+checkBill (Bill b, BillLine bsl) {
+    LOCAL checked = BOOLEAN ();
+    checked() <- NOT service(b,bsl);
+    FOR bill(BillLine bl) = b DO
+        serviceLine(bl, bsl) <- checked();
+}
+
+EXTEND FORM bill
+    OBJECTS bsl = BillLine
+    PROPERTIES(bsl) READONLY index, nameItem, nameUom, idBarCodeItem, idItem, referenceItem, untaxedAmount, costAllocated
+    PROPERTIES(bsl) nameCostAllocationBase
+    FILTERS b = bill(bsl),
+            item(bsl) IS Service
+
+    OBJECTS bc = Bill
+    PROPERTIES(bc) READONLY number, dateTime, nameVendor, imagedNameStatus, nameType, nameCompany, amount
+    PROPERTIES service(bc, bsl) ON CHANGE checkBill(bc, bsl)
+    PROPERTIES allocate(bsl) TOOLBAR DRAW bc
+    PROPERTIES(bc) NEWSESSION EDIT
+    
+    OBJECTS bl = BillLine
+    PROPERTIES(bl) READONLY numberDate SHOWIF (GROUP SUM 1 IF service(Bill bb, bsl)) > 1 
+    PROPERTIES(bl) READONLY index, nameItem, nameUom, idBarCodeItem, idItem, referenceItem, quantity, price, taxes, untaxedAmount
+    PROPERTIES(bl, bsl) READONLY allocationBase
+    PROPERTIES(bl, bsl) costAllocated, serviceLine
+    FILTERS service(bill(bl), bsl),
+            item(bl) IS Product
+;
+
+DESIGN bill {
+    OBJECTS {
+        details {
+            NEW cost {
+                showIf = countServiceLine(b);
+                caption = 'Cost distribution';
+                MOVE BOX(bsl) {
+                    fill = 0.3;
+                }
+                MOVE BOX(bc);
+                MOVE BOX(bl);                
+            }
+        }
+    }
+}

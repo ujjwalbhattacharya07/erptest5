@@ -1,0 +1,111 @@
+MODULE Contract;
+
+REQUIRE MetaNumerator, Company;
+
+NAMESPACE MasterData;
+
+CLASS Contract 'Contract';
+
+@defineID(contract, 'Contracts', 'CN', 6);
+
+name '{Name}' = DATA ISTRING[30] (Contract) IN id;
+
+date 'Date' = DATA DATE (Contract) NONULL IN id;
+endDate 'End date' = DATA DATE (Contract) IN id;
+
+number 'Number' = DATA STRING[50] (Contract) NONULL CHARWIDTH 10 IN id;
+
+numberDate 'Description' (Contract c) = number(c) + ' (' + date(c) + ')';
+description (Contract c) = OVERRIDE name(c), numberDate(c);  
+
+company 'Company' = DATA Company (Contract) NONULL;
+idCompany 'Company ID' (Contract o) = id(company(o));
+nameCompany 'Company' (Contract o) = name(company(o)) IN id;
+WHEN LOCAL SET(Contract o IS Contract) AND NOT CHANGED(company(o)) DO company(o) <- defaultCompany();
+
+partner 'Partner' = DATA Partner (Contract) NONULL;
+idPartner 'Partner ID' (Contract p) = id(partner(p));
+namePartner 'Partner' (Contract p) = name(partner(p)) IN id;
+
+countContract (Company c, Partner p) = GROUP SUM 1 IF company(Contract ct) = c AND partner(ct) = p;  
+
+FORM contract 'Contract'
+    OBJECTS c = Contract PANEL
+    PROPERTIES(c) id, name, date, endDate, number, nameCompany, namePartner 
+    
+    EDIT Contract OBJECT c
+;
+
+DESIGN contract {
+    OBJECTS {
+        NEW header {
+            horizontal = TRUE;
+            NEW headerLeft {
+                NEW params {
+                    caption = 'Parameters';
+                    horizontal = TRUE;
+                    alignment = STRETCH;
+                    MOVE PROPERTY(id(c));
+                    MOVE PROPERTY(number(c));
+                    MOVE PROPERTY(date(c));
+                    MOVE PROPERTY(endDate(c));
+                    MOVE PROPERTY(name(c));
+                }
+                NEW legal {
+                    caption = 'Partners';
+                    horizontal = TRUE;
+                    alignment = STRETCH;
+                    MOVE PROPERTY(nameCompany(c));
+                    MOVE PROPERTY(namePartner(c));
+                }
+            }
+            NEW headerRight;
+        }
+    }
+}
+
+FORM contracts 'Contracts'
+    OBJECTS c = Contract
+    PROPERTIES(c) READONLY id, name, date, endDate, number, nameCompany, namePartner
+    PROPERTIES(c) NEWSESSION NEW, EDIT, DELETE
+;
+
+FORM dialogContracts 'Contracts'
+    OBJECTS c = Contract
+    PROPERTIES(c) READONLY id, name, date, endDate, number, nameCompany, namePartner
+    
+    LIST Contract OBJECT c
+;
+
+NAVIGATOR {
+    masterData {
+        NEW contracts;
+    }
+}
+
+META defineDocContract(doc, obj, property, container)
+    contract 'Contract' = DATA Contract (###doc) INDEXED;
+    numberDateContract (###doc i) = numberDate(contract(i));
+    descriptionContract 'Contract' (###doc i) = description(contract(i));
+    
+    CONSTRAINT contract(###doc i) AND NOT company(i) = company(contract(i))
+        CHECKED BY contract[###doc]
+        MESSAGE 'The company of the document does not match the company of the contract';
+    
+    CONSTRAINT contract(###doc i) AND NOT property(i) = partner(contract(i))
+        CHECKED BY contract[###doc]
+        MESSAGE 'The partner of the document does not match the partner of the contract';
+    
+    WHEN LOCAL FORMS doc CHANGED(company(###doc i)) OR CHANGED(property(i)) DO
+        contract(i) <- NULL;  
+    
+    EXTEND FORM doc
+        PROPERTIES(obj) READONLYIF readonly(obj) descriptionContract SHOWIF countContract(company(obj), property(obj))
+    ;
+    
+    DESIGN doc {
+        container {
+            MOVE PROPERTY(descriptionContract(obj));
+        }
+    }
+END

@@ -1,0 +1,10 @@
+MODULE Manufacturing;
+
+REQUIRE ManufacturingSettings, 
+        Bom, BomNested, BomStructureCost, BomItem, BomImport, 
+        ManufacturingOrder, ManufacturingOrderInitial,
+        ManufacturingOrderInProgress, ManufacturingOrderDone, ManufacturingOrderCanceled,
+        ManufacturingOrderBulkCreate, ManufacturingOrderTotal,
+        ManufacturingOrderRes, ManufacturingOrderInv, ManufacturingOrderCost,
+        ManufacturingOrderLot, ManufacturingOrderLotPrint, 
+        ManufacturingOrderPrint, ManufacturingOrderReport; 

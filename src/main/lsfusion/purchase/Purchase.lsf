@@ -1,0 +1,15 @@
+MODULE Purchase;
+
+REQUIRE PurchaseSettings, 
+        PurchaseOrder, PurchaseOrderFilter, PurchaseOrderSelection,
+        PurchaseOrderSent, PurchaseOrderConfirmed, PurchaseOrderCanceled, PurchaseOrderLocked,
+        PurchaseOrderSearch, PurchaseOrderPrint, PurchaseOrderPartner, PurchaseOrderItem, PurchaseOrderDebt, PurchaseOrderInitial,
+        PurchaseOrderUom, PurchaseOrderPack,
+        PurchaseOrderReceipt, PurchaseOrderReceiptCost, PurchaseOrderReceiptStatus, PurchaseOrderReceiptInitial,
+        PurchaseOrderBill, PurchaseOrderBillStatus, PurchaseOrderBillInitial, PurchaseOrderBillUom,
+        PurchaseOrderBillReceipt, PurchaseOrderBillReceiptInitial, PurchaseOrderManufacturing, 
+        PurchasePricelist, PurchasePricelistDone, PurchasePricelistItem, PurchasePricelistPartner, 
+        PurchasePricelistValue, PurchasePricelistImport,
+        PurchaseOrderPricelist, PurchaseOrderPricelistUom,
+        PurchaseBillPricelist, PurchaseBillPricelistUom,
+        PurchaseOrderReport, PurchaseOrderShipmentAuto;

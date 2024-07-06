@@ -1,0 +1,15 @@
+MODULE SalesDiscountInvoice;
+
+REQUIRE SalesPricelistInvoice, SalesDiscountLine, Refund;
+
+NAMESPACE Sales;
+
+@defineDocSalesDiscount(invoice);
+
+@defineDocSalesDiscountLine(invoice, 'Do not automatically calculate discounts in invoice', Invoicing);
+
+skip(InvoiceLine l) += isRefund(invoice(l));
+
+EXTEND FORM invoice
+    PROPERTIES recalcDiscountAuto(i) DRAW l TOOLBAR
+;

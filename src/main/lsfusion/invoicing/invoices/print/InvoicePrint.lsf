@@ -1,0 +1,53 @@
+MODULE InvoicePrint;
+
+REQUIRE Invoice, Product, DocTemplate;
+
+NAMESPACE Invoicing;
+
+fullNameCompany (Invoice i) = fullName(company(i));
+
+addressLinesCompany (Invoice i) = addressLines(company(i));
+addressCsvCompany (Invoice i) = addressCsv(company(i));
+phoneCompany (Invoice i) = phone(company(i));
+emailCompany (Invoice i) = email(company(i));
+websiteCompany (Invoice i) = website(company(i));
+
+fullNameCustomer (Invoice i) = fullName(customer(i));
+
+addressLinesCustomer (Invoice i) = addressLines(customer(i)); 
+phoneCustomer (Invoice i) = phone(customer(i));
+
+nameCountryOrigin (InvoiceLine l) = nameCountryOrigin(item(l));
+idCountryOrigin (InvoiceLine l) = id(countryOrigin(item(l)));
+
+printUom = ABSTRACT VALUE Uom (InvoiceLine);
+namePrintUom (InvoiceLine l) = name(printUom(l));
+printUom(InvoiceLine l) += uom(l);
+
+printQuantity = ABSTRACT VALUE NUMERIC[16,3] (InvoiceLine);
+printQuantity(InvoiceLine l) += quantity(l);  
+
+printPrice = ABSTRACT VALUE NUMERIC[16,3] (InvoiceLine);
+printPrice(InvoiceLine l) += price(l);  
+
+FORM printInvoice 'Invoice'
+    OBJECTS o = Invoice PANEL 
+    PROPERTIES(o) dateTime, dueDateTime, number,
+                  nameCompany, fullNameCompany, 
+                  addressLinesCompany, addressCsvCompany, 
+                  phoneCompany, emailCompany, websiteCompany,
+                  nameCustomer, fullNameCustomer, 
+                  addressLinesCustomer, addressCsvCustomer, deliveryAddress, 
+                  phoneCustomer
+    
+    OBJECTS l = InvoiceLine
+    PROPERTIES(l) nameItem, idItem, description, nameUom = namePrintUom, idBarCodeItem, referenceItem,
+                  quantity = printQuantity, price = printPrice, untaxedAmount,
+                  taxPercent, taxAmount, taxes, 
+                  amount, nameCountryOrigin, idCountryOrigin,
+                  weight
+    FILTERS invoice(l) = o
+;
+
+@defineDocTemplateType(invoice, 'Invoice template');
+@defineDocTemplateTypeForm(invoice, i, Invoicing);

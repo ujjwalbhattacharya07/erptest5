@@ -1,0 +1,16 @@
+MODULE ScrapSearch;
+
+REQUIRE Scrap, ResLedger;
+
+NAMESPACE Inventory;
+
+@defineDocSearch(scrap, product, quantity, 'Quantity', s);
+@defineBarCodeSearch(scrap, s, l, quantity);
+
+available 'Available' (Scrap s, Product p) = prevAvailableRec(location(s), p); 
+
+EXTEND FORM scrap
+    PROPERTIES(s, itm) READONLY available
+    FILTERGROUP available
+        FILTER 'Available' available(s, itm) 'F5' DEFAULT
+;

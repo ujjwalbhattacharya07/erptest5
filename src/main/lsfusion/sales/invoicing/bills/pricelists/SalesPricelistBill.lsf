@@ -1,0 +1,72 @@
+MODULE SalesPricelistBill;
+
+REQUIRE BillReady, SalesPricelistDone;
+
+NAMESPACE Sales;
+
+pricelistType = DATA PricelistType (BillType);
+namePricelistType 'Pricelist type' (BillType t) = name(pricelistType(t));
+
+setPriceToCost 'Set cost price' = DATA BOOLEAN (BillType);
+
+EXTEND FORM billType PROPERTIES namePricelistType(o), setPriceToCost(o) SHOWIF pricelistType(o);
+
+// lines
+@defineDocLineRelation(bill, pricelist, 'Bill', 'Pricelist', b, p);
+
+fill ABSTRACT LIST (PricelistLine, BillLine);
+billPricelistCreated = DATA LOCAL Pricelist ();
+newPricelist (Bill b) {
+    NEW r = Pricelist { 
+        type(r) <- pricelistType(type(b));
+
+        done(r) <- TRUE;    
+    
+        FOR bill(BillLine l) = b AND item(l) IS Product INLINE NEW pl = PricelistLine DO {            
+            pricelist(pl) <- r;
+            item(pl) <- item(l);
+            billLine(pl) <- l;
+            cost(pl) <- price(l) IF setPriceToCost(type(b));
+            fill(pl, l);
+        }
+        
+        billPricelistCreated() <- r;
+    }
+}
+
+createPricelist 'Create Pricelist' (Bill b) {
+    APPLY;
+    IF canceled() THEN RETURN;
+    
+    NEWSESSION {
+        newPricelist(b);
+        SHOW pricelist OBJECTS p = billPricelistCreated() DOCKED;
+    }
+} 
+
+EXTEND FORM bill
+    PROPERTIES(b) createPricelistPrimary = createPricelist SHOWIF ready(b) AND pricelistType(type(b)) AND NOT countPricelistLine(b),
+                  createPricelistSecondary = createPricelist SHOWIF ready(b) AND pricelistType(type(b)) AND countPricelistLine(b)
+
+    OBJECTS p = Pricelist
+    PROPERTIES(p) READONLY number, startDateTime, endDateTime, imagedNameStatus BACKGROUND colorStatus(p), nameType
+    PROPERTIES(p) NEWSESSION EDIT GRID   
+    FILTERS in(b, p)
+;
+
+DESIGN bill {
+    primaryActions {
+        MOVE PROPERTY(createPricelistPrimary) { fontStyle = 'bold'; }
+    }
+    secondaryActions {
+        MOVE PROPERTY(createPricelistSecondary);
+    }
+    relatedDoc {
+        MOVE BOX(p) {
+            showIf = pricelistType(type(b));
+            caption = badged('Pricelists', countPricelists(b));
+        }
+        REMOVE TOOLBARSYSTEM(p);
+    }
+}
+

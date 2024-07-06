@@ -1,0 +1,30 @@
+MODULE PartnerSales;
+
+REQUIRE MasterData, Partner;
+
+NAMESPACE MasterData;
+
+isCustomer 'Customer' = DATA BOOLEAN (Partner);
+
+isCustomer(Partner p) <- TRUE WHEN SET(p IS Partner);
+
+EXTEND FORM partners
+    PROPERTIES(p) READONLYIF isReadonly() isCustomer
+;
+
+EXTEND FORM partner 
+    PROPERTIES(p) isCustomer
+;
+
+DESIGN partner {
+    headerColumn3 {
+        MOVE PROPERTY(isCustomer(p));   
+    }
+    tabs {
+        NEW customer {
+            showIf = isCustomer(p);
+            caption = 'Sales';
+            NEW customerOptions;
+        }
+    }
+}

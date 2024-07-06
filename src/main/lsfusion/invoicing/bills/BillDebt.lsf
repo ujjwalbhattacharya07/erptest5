@@ -1,0 +1,61 @@
+MODULE BillDebt;
+
+REQUIRE BillDone, BillCanceled, BillContract, BillCurrency, Debt;
+
+NAMESPACE Invoicing;
+
+// extend
+EXTEND CLASS Bill : IncomingDebt;
+type(Bill b) += nameType(b);
+
+active (Bill b) += active(b);
+number (Bill b) += number(b);
+dateTime (Bill b) += dateTime(b);
+dueDateTime (Bill b) += dueDateTime(b);
+
+partner (Bill b) += vendor(b);
+company (Bill b) += company(b);
+
+contract (Bill b) += contract(b);
+
+sourceCurrency (Bill b) += currency(b);
+sourceAmount (Bill b) += amount(b);
+
+// pay
+pay 'Match' (Bill b, OutgoingDebt d) {
+    paid(b, d) <- left(b, d) (+) paid(b, d);
+} CHANGEMOUSE 'DBLCLK';
+
+EXTEND FORM bill
+    PROPERTIES(b) paid
+    
+    OBJECTS d = OutgoingDebt
+    PROPERTIES(d) READONLY dateTime, number, class, type
+    FILTERS paid(b, d), active(d)
+    
+    OBJECTS dd = OutgoingDebt
+    PROPERTIES(dd) READONLY dateTime, number, class, type, left
+    PROPERTIES pay(b, dd) TOOLBAR
+    FILTERS canBePaid(b, dd), active(dd)   
+;
+
+DESIGN bill {
+    total {
+        MOVE PROPERTY(paid(b));
+    }
+    details {
+        NEW debts {
+            caption = 'Payments matching';
+            MOVE BOX(d) { caption = 'Matched'; }            
+            MOVE BOX(dd) { caption = 'Available'; }          
+        }
+    }
+}
+
+EXTEND FORM bills   
+    PROPERTIES(b) READONLY paid  
+;
+
+// auto set done
+WHEN SET(amount[Debt](Bill b) = paid(b)) DO done(b) <- TRUE;
+WHEN DROPPED(amount[Debt](Bill b) = paid(b)) DO done(b) <- NULL;
